@@ -582,82 +582,335 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Photo upload handler
+    // Photo & Collage upload handler (1 to 4 photos)
     const inputFoto = document.getElementById('foto_evidencia');
     const fileNameText = document.getElementById('file_name_text');
     const imagePreviewContainer = document.getElementById('image_preview_container');
     const imagePreview = document.getElementById('image_preview');
     const btnRemoveFoto = document.getElementById('btnRemoveFoto');
+    const btnClearAllFotos = document.getElementById('btnClearAllFotos');
+    const collageCounterBadge = document.getElementById('collage_counter_badge');
+    const collageLayoutsBar = document.getElementById('collage_layouts_bar');
+    const collageLayoutButtons = document.getElementById('collage_layout_buttons');
+    const collageThumbsContainer = document.getElementById('collage_thumbs_container');
+    const collageThumbsList = document.getElementById('collage_thumbs_list');
+    const thumbsCountText = document.getElementById('thumbs_count_text');
 
+    let uploadedImages = []; // Array of { id, img, name, dataUrl }
+    let currentLayout = 'auto'; // 'auto', '2-col', '2-row', '3-top', '3-left', '4-grid'
     let fotoBase64 = '';
     let fotoNombre = '';
-    let fotoFile = null; // Archivo original para compartir via Web Share API
+    let fotoFile = null; // Archivo final combinado para Web Share API
 
+    // Función para dibujar una imagen centrada con recorte proporcional (object-fit: cover)
+    const drawImageCover = (ctx, img, x, y, w, h, radius = 0) => {
+        ctx.save();
+        if (radius > 0) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + w - radius, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+            ctx.lineTo(x + w, y + h - radius);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            ctx.lineTo(x + radius, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.clip();
+        }
+
+        const imgRatio = img.width / img.height;
+        const targetRatio = w / h;
+        let sWidth, sHeight, sx, sy;
+
+        if (imgRatio > targetRatio) {
+            sHeight = img.height;
+            sWidth = img.height * targetRatio;
+            sx = (img.width - sWidth) / 2;
+            sy = 0;
+        } else {
+            sWidth = img.width;
+            sHeight = img.width / targetRatio;
+            sx = 0;
+            sy = (img.height - sHeight) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sWidth, sHeight, x, y, w, h);
+        ctx.restore();
+    };
+
+    // Renderizar la barra de layouts según la cantidad de fotos
+    const updateLayoutButtons = () => {
+        collageLayoutButtons.innerHTML = '';
+        const count = uploadedImages.length;
+
+        if (count < 2) {
+            collageLayoutsBar.style.display = 'none';
+            return;
+        }
+
+        collageLayoutsBar.style.display = 'flex';
+        let options = [];
+
+        if (count === 2) {
+            options = [
+                { id: '2-col', label: 'Lado a lado (Verticales)', icon: 'fa-table-columns' },
+                { id: '2-row', label: 'Arriba / Abajo (Horizontales)', icon: 'fa-grip-lines' }
+            ];
+            if (currentLayout !== '2-col' && currentLayout !== '2-row') {
+                currentLayout = '2-col';
+            }
+        } else if (count === 3) {
+            options = [
+                { id: '3-top', label: '1 Grande Arriba + 2 Abajo', icon: 'fa-table-cells' },
+                { id: '3-left', label: '1 Grande Izquierda + 2 Derecha', icon: 'fa-table-cells-large' }
+            ];
+            if (currentLayout !== '3-top' && currentLayout !== '3-left') {
+                currentLayout = '3-top';
+            }
+        } else if (count === 4) {
+            options = [
+                { id: '4-grid', label: 'Cuadrícula 2×2', icon: 'fa-border-all' }
+            ];
+            currentLayout = '4-grid';
+        }
+
+        options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-layout-option' + (currentLayout === opt.id ? ' active' : '');
+            btn.innerHTML = `<i class="fa-solid ${opt.icon}"></i> ${opt.label}`;
+            btn.addEventListener('click', () => {
+                currentLayout = opt.id;
+                document.querySelectorAll('.btn-layout-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                generateCollageOrSingle();
+            });
+            collageLayoutButtons.appendChild(btn);
+        });
+    };
+
+    // Actualizar la tira de miniaturas
+    const updateThumbnails = () => {
+        collageThumbsList.innerHTML = '';
+        const count = uploadedImages.length;
+        thumbsCountText.textContent = count;
+
+        if (count === 0) {
+            collageThumbsContainer.style.display = 'none';
+            collageCounterBadge.style.display = 'none';
+            btnClearAllFotos.style.display = 'none';
+            return;
+        }
+
+        collageThumbsContainer.style.display = 'block';
+        collageCounterBadge.style.display = 'inline-block';
+        collageCounterBadge.textContent = `${count} / 4 fotos`;
+        btnClearAllFotos.style.display = 'inline-flex';
+
+        uploadedImages.forEach((item, index) => {
+            const card = document.createElement('div');
+            card.className = 'collage-thumb-card';
+            card.innerHTML = `
+                <img src="${item.dataUrl}" alt="Foto ${index + 1}">
+                <button type="button" class="btn-remove-thumb" title="Eliminar foto">&times;</button>
+            `;
+
+            card.querySelector('.btn-remove-thumb').addEventListener('click', () => {
+                uploadedImages.splice(index, 1);
+                updateLayoutButtons();
+                updateThumbnails();
+                generateCollageOrSingle();
+                showToast('Foto eliminada del collage.', 'success');
+            });
+
+            collageThumbsList.appendChild(card);
+        });
+    };
+
+    // Generar la imagen final (1 foto individual o Collage de 2 a 4 fotos)
+    const generateCollageOrSingle = () => {
+        const count = uploadedImages.length;
+
+        if (count === 0) {
+            inputFoto.value = '';
+            fotoBase64 = '';
+            fotoNombre = '';
+            fotoFile = null;
+            fileNameText.textContent = 'Ningún archivo seleccionado';
+            imagePreviewContainer.style.display = 'none';
+            imagePreview.src = '';
+            collageLayoutsBar.style.display = 'none';
+            collageThumbsContainer.style.display = 'none';
+            collageCounterBadge.style.display = 'none';
+            btnClearAllFotos.style.display = 'none';
+            return;
+        }
+
+        fileNameText.textContent = 'Procesando ' + (count === 1 ? 'imagen...' : `collage de ${count} fotos...`);
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (count === 1) {
+            // Renderizado de 1 sola foto respetando su proporción
+            const img = uploadedImages[0].img;
+            const max_size = 1000;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > max_size) {
+                    height = Math.round(height * (max_size / width));
+                    width = max_size;
+                }
+            } else {
+                if (height > max_size) {
+                    width = Math.round(width * (max_size / height));
+                    height = max_size;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            fotoNombre = uploadedImages[0].name.replace(/\.[^/.]+$/, '') + '.jpg';
+        } else {
+            // Lienzo cuadrado para collage
+            const size = 1200;
+            canvas.width = size;
+            canvas.height = size;
+
+            // Fondo blanco y separación limpia
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+
+            const gap = 14;
+            const radius = 6;
+
+            if (count === 2) {
+                if (currentLayout === '2-row') {
+                    // Arriba y Abajo
+                    const h = (size - gap * 3) / 2;
+                    const w = size - gap * 2;
+                    drawImageCover(ctx, uploadedImages[0].img, gap, gap, w, h, radius);
+                    drawImageCover(ctx, uploadedImages[1].img, gap, gap * 2 + h, w, h, radius);
+                } else {
+                    // Lado a lado (2-col default)
+                    const w = (size - gap * 3) / 2;
+                    const h = size - gap * 2;
+                    drawImageCover(ctx, uploadedImages[0].img, gap, gap, w, h, radius);
+                    drawImageCover(ctx, uploadedImages[1].img, gap * 2 + w, gap, w, h, radius);
+                }
+            } else if (count === 3) {
+                if (currentLayout === '3-left') {
+                    // 1 Grande a la izquierda + 2 a la derecha
+                    const wLeft = (size - gap * 3) * 0.55;
+                    const wRight = (size - gap * 3) * 0.45;
+                    const hFull = size - gap * 2;
+                    const hHalf = (size - gap * 3) / 2;
+
+                    drawImageCover(ctx, uploadedImages[0].img, gap, gap, wLeft, hFull, radius);
+                    drawImageCover(ctx, uploadedImages[1].img, gap * 2 + wLeft, gap, wRight, hHalf, radius);
+                    drawImageCover(ctx, uploadedImages[2].img, gap * 2 + wLeft, gap * 2 + hHalf, wRight, hHalf, radius);
+                } else {
+                    // 1 Grande arriba + 2 abajo (3-top default)
+                    const hTop = (size - gap * 3) * 0.55;
+                    const hBottom = (size - gap * 3) * 0.45;
+                    const wFull = size - gap * 2;
+                    const wHalf = (size - gap * 3) / 2;
+
+                    drawImageCover(ctx, uploadedImages[0].img, gap, gap, wFull, hTop, radius);
+                    drawImageCover(ctx, uploadedImages[1].img, gap, gap * 2 + hTop, wHalf, hBottom, radius);
+                    drawImageCover(ctx, uploadedImages[2].img, gap * 2 + wHalf, gap * 2 + hTop, wHalf, hBottom, radius);
+                }
+            } else if (count >= 4) {
+                // Cuadrícula 2x2
+                const w = (size - gap * 3) / 2;
+                const h = (size - gap * 3) / 2;
+
+                drawImageCover(ctx, uploadedImages[0].img, gap, gap, w, h, radius);
+                drawImageCover(ctx, uploadedImages[1].img, gap * 2 + w, gap, w, h, radius);
+                drawImageCover(ctx, uploadedImages[2].img, gap, gap * 2 + h, w, h, radius);
+                drawImageCover(ctx, uploadedImages[3].img, gap * 2 + w, gap * 2 + h, w, h, radius);
+            }
+
+            fotoNombre = `collage_${count}_fotos_${Date.now()}.jpg`;
+        }
+
+        // Comprimir como JPEG de alta calidad
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+        fotoBase64 = dataUrl.split(',')[1];
+
+        // Crear File para Web Share API
+        canvas.toBlob((blob) => {
+            fotoFile = new File([blob], fotoNombre, { type: 'image/jpeg' });
+        }, 'image/jpeg', 0.78);
+
+        fileNameText.textContent = count === 1 ? fotoNombre : `Collage activo (${count} fotos combinadas)`;
+        imagePreview.src = dataUrl;
+        imagePreviewContainer.style.display = 'inline-block';
+    };
+
+    // Procesar archivos seleccionados (soporta selección múltiple o adición secuencial)
     inputFoto.addEventListener('change', () => {
-        const file = inputFoto.files[0];
-        if (file) {
-            fileNameText.textContent = 'Procesando e imprimiendo imagen...';
-            
+        const files = Array.from(inputFoto.files);
+        if (!files || files.length === 0) return;
+
+        const availableSlots = 4 - uploadedImages.length;
+        if (availableSlots <= 0) {
+            showToast('Ya tienes el máximo de 4 fotos cargadas. Elimina alguna para agregar otra.', 'error');
+            inputFoto.value = '';
+            return;
+        }
+
+        const filesToProcess = files.slice(0, availableSlots);
+        if (files.length > availableSlots) {
+            showToast(`Solo se añadieron ${availableSlots} foto(s) para respetar el máximo de 4.`, 'error');
+        }
+
+        let loadedCount = 0;
+        filesToProcess.forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
+                    uploadedImages.push({
+                        id: Date.now() + Math.random(),
+                        img: img,
+                        name: file.name,
+                        dataUrl: e.target.result
+                    });
 
-                    // Ajustar tamaño máximo a 1000px para mantener la hoja ligera
-                    const max_size = 1000;
-                    if (width > height) {
-                        if (width > max_size) {
-                            height *= max_size / width;
-                            width = max_size;
-                        }
-                    } else {
-                        if (height > max_size) {
-                            width *= max_size / height;
-                            height = max_size;
-                        }
+                    loadedCount++;
+                    if (loadedCount === filesToProcess.length) {
+                        updateLayoutButtons();
+                        updateThumbnails();
+                        generateCollageOrSingle();
+                        showToast(uploadedImages.length > 1 ? `Collage actualizado (${uploadedImages.length} fotos).` : 'Foto cargada con éxito.', 'success');
                     }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Comprimir como JPEG con calidad 0.7
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    
-                    fotoBase64 = dataUrl.split(',')[1];
-                    // Renombrar la extensión a .jpg por la compresión
-                    fotoNombre = file.name.substring(0, file.name.lastIndexOf('.')) + '.jpg';
-
-                    // Convertir el canvas a un File real para poder adjuntarlo en Web Share API
-                    canvas.toBlob((blob) => {
-                        fotoFile = new File([blob], fotoNombre, { type: 'image/jpeg' });
-                    }, 'image/jpeg', 0.7);
-
-                    fileNameText.textContent = fotoNombre;
-                    imagePreview.src = dataUrl;
-                    imagePreviewContainer.style.display = 'inline-block';
-                    showToast('Foto cargada y optimizada con éxito.', 'success');
                 };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
-        }
+        });
+
+        // Limpiar el input para permitir volver a seleccionar la misma foto si se desea
+        inputFoto.value = '';
     });
 
-    btnRemoveFoto.addEventListener('click', () => {
-        inputFoto.value = '';
-        fotoBase64 = '';
-        fotoNombre = '';
-        fotoFile = null;
-        fileNameText.textContent = 'Ningún archivo seleccionado';
-        imagePreviewContainer.style.display = 'none';
-        imagePreview.src = '';
-        showToast('Foto removida.', 'success');
-    });
+    // Vaciar todas las fotos
+    const clearAllUploadedPhotos = () => {
+        uploadedImages = [];
+        currentLayout = 'auto';
+        generateCollageOrSingle();
+        showToast('Fotos removidas.', 'success');
+    };
+
+    btnRemoveFoto.addEventListener('click', clearAllUploadedPhotos);
+    btnClearAllFotos.addEventListener('click', clearAllUploadedPhotos);
 
     // Activity selection element
     const selectActividad = document.getElementById('actividad');
@@ -925,13 +1178,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('linea').value = '';
             document.getElementById('observaciones').value = '';
 
-            // Clean photo input
-            inputFoto.value = '';
-            fotoBase64 = '';
-            fotoNombre = '';
-            fileNameText.textContent = 'Ningún archivo seleccionado';
-            imagePreviewContainer.style.display = 'none';
-            imagePreview.src = '';
+            // Clean photo & collage input
+            clearAllUploadedPhotos();
 
             // Reset supports
             ['apoyo_aliado', 'apoyo_especialista', 'apoyo_gerente_zona', 'asignacion_economica'].forEach(id => {

@@ -218,19 +218,40 @@
                 <textarea id="observaciones" placeholder="Describe los logros, compromisos o detalles de la visita comercial..." required></textarea>
             </div>
 
-            <!-- Evidencia Fotográfica -->
+            <!-- Evidencia Fotográfica / Creador de Collage -->
             <div class="form-group full-width">
-                <label for="foto_evidencia"><i class="fa-solid fa-camera"></i> Evidencia Fotográfica:</label>
+                <div class="label-action-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label for="foto_evidencia" style="margin-bottom: 0;"><i class="fa-solid fa-images"></i> Evidencia Fotográfica / Collage:</label>
+                    <span id="collage_counter_badge" class="badge-counter" style="display: none;">0 / 4 fotos</span>
+                </div>
+                
                 <div class="file-upload-wrapper">
-                    <input type="file" id="foto_evidencia" accept="image/*" style="display: none;">
-                    <button type="button" class="btn-file-trigger" onclick="document.getElementById('foto_evidencia').click();">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> Seleccionar o Tomar Foto
+                    <input type="file" id="foto_evidencia" accept="image/*" multiple style="display: none;">
+                    <button type="button" class="btn-file-trigger" id="btnTriggerFoto" onclick="document.getElementById('foto_evidencia').click();">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Seleccionar o Añadir Fotos (Máx 4)
+                    </button>
+                    <button type="button" class="btn-clear-all-fotos" id="btnClearAllFotos" style="display: none;">
+                        <i class="fa-solid fa-trash-can"></i> Vaciar fotos
                     </button>
                     <span id="file_name_text" class="help-text" style="margin-left: 10px;">Ningún archivo seleccionado</span>
                 </div>
+
+                <!-- Barra de Diseño de Plantilla (Visible cuando hay 2 o 3 fotos) -->
+                <div id="collage_layouts_bar" class="collage-layouts-bar" style="display: none;">
+                    <span class="layout-label"><i class="fa-solid fa-table-cells-large"></i> Diseño del Collage:</span>
+                    <div id="collage_layout_buttons" class="layout-buttons-group"></div>
+                </div>
+
+                <!-- Contenedor de Vista Previa del Collage / Imagen -->
                 <div id="image_preview_container" class="image-preview-container" style="display: none; margin-top: 15px; position: relative;">
-                    <img id="image_preview" src="" alt="Vista previa de evidencia" style="max-width: 100%; max-height: 250px; border-radius: 10px; border: 1.5px solid var(--input-border); object-fit: contain;">
+                    <img id="image_preview" src="" alt="Vista previa de evidencia" style="max-width: 100%; max-height: 340px; border-radius: 12px; border: 1.5px solid var(--input-border); object-fit: contain; background: #ffffff; box-shadow: 0 4px 14px rgba(0,0,0,0.06);">
                     <button type="button" id="btnRemoveFoto" class="btn-remove-foto" title="Remover Foto">&times;</button>
+                </div>
+
+                <!-- Tira de Miniaturas individuales -->
+                <div id="collage_thumbs_container" class="collage-thumbs-container" style="display: none;">
+                    <span class="thumbs-title">Fotos seleccionadas (<span id="thumbs_count_text">0</span>):</span>
+                    <div id="collage_thumbs_list" class="collage-thumbs-list"></div>
                 </div>
             </div>
 
