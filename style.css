@@ -1105,3 +1105,12 @@ button.action-btn {
 .btn-remove-thumb:hover {
     background-color: #ef4444;
 }
+
+@keyframes iaFlashHighlight {
+    0% { border-color: var(--brand-orange); box-shadow: 0 0 0 6px rgba(255, 102, 0, 0.25); background-color: rgba(79, 168, 222, 0.06); }
+    100% { border-color: var(--input-border); box-shadow: none; background-color: var(--input-bg); }
+}
+
+.textarea-ia-highlight {
+    animation: iaFlashHighlight 1.2s ease-out;
+}

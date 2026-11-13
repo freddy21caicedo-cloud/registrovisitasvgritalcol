@@ -967,6 +967,417 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // =========================================================================
+    // Motor Híbrido de Corrección Ortográfica y Redacción Ejecutiva (Italcol)
+    // =========================================================================
+    const textareaObservaciones = document.getElementById('observaciones');
+    const btnMejorarIA = document.getElementById('btnMejorarIA');
+    const btnUndoIA = document.getElementById('btnUndoIA');
+    let originalObservaciones = '';
+
+    const preserveCaseReplace = (str, regex, replacement) => {
+        return str.replace(regex, (match) => {
+            if (match === match.toUpperCase() && match.length > 1) {
+                return replacement.toUpperCase();
+            }
+            if (match.charAt(0) === match.charAt(0).toUpperCase()) {
+                return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+            }
+            return replacement;
+        });
+    };
+
+    const corregirOrtografiaLocal = (texto) => {
+        if (!texto || typeof texto !== 'string') return '';
+        let t = texto.trim();
+        if (!t) return '';
+
+        // 1. Limpiar espacios múltiples y saltos excesivos
+        t = t.replace(/[ \t]+/g, ' ');
+        t = t.replace(/ +([,;.:?!])/g, '$1');
+        t = t.replace(/([,;.:?!])([^\s0-9.,;?!])/g, '$1 $2');
+
+        // 2. Diccionario de correcciones ortográficas y vocabulario técnico agropecuario/Italcol
+        const diccionario = [
+            // Palabras partidas o errores tipográficos comunes
+            [/\bi\s+dea\b/gi, 'idea'],
+            [/\bi\s+deas\b/gi, 'ideas'],
+            [/\bcistema\b/gi, 'sistema'],
+            [/\bcistemas\b/gi, 'sistemas'],
+            [/\bacuacula\b/gi, 'acuícola'],
+            [/\bacuaculas\b/gi, 'acuícolas'],
+            [/\bacuicola\b/gi, 'acuícola'],
+            [/\bacuicolas\b/gi, 'acuícolas'],
+            [/\bavicola\b/gi, 'avícola'],
+            [/\bavicolas\b/gi, 'avícolas'],
+            [/\bporcicola\b/gi, 'porcícola'],
+            [/\bporcicolas\b/gi, 'porcícolas'],
+            [/\bganaderia\b/gi, 'ganadería'],
+            [/\bporcicultura\b/gi, 'porcicultura'],
+            [/\bavicultura\b/gi, 'avicultura'],
+
+            // Confusiones frecuentes b/v, s/c/z, h, juntas/separadas
+            [/\bhiso\b/gi, 'hizo'],
+            [/\bhisieron\b/gi, 'hicieron'],
+            [/\biva\b/gi, 'iba'],
+            [/\bivan\b/gi, 'iban'],
+            [/\btanbien\b/gi, 'también'],
+            [/\btambien\b/gi, 'también'],
+            [/\bademas\b/gi, 'además'],
+            [/\bdespues\b/gi, 'después'],
+            [/\batraves\b/gi, 'a través'],
+            [/\ba traves\b/gi, 'a través'],
+            [/\bha cerca\b/gi, 'acerca'],
+            [/\bhaci\b/gi, 'así'],
+            [/\basi\b/gi, 'así'],
+            [/\bsi no\b/gi, 'sino'],
+            [/\bpor que\b/gi, 'porque'],
+            [/\binformasion\b/gi, 'información'],
+            [/\binformacion\b/gi, 'información'],
+            [/\bobserbacion\b/gi, 'observación'],
+            [/\bobserbaciones\b/gi, 'observaciones'],
+            [/\bobservacion\b/gi, 'observación'],
+            [/\bvicitacion\b/gi, 'visitación'],
+            [/\bvicita\b/gi, 'visita'],
+            [/\bvicito\b/gi, 'visitó'],
+            [/\bvenda\b/gi, 'venta'],
+            [/\bgrasias\b/gi, 'gracias'],
+            [/\bnesesario\b/gi, 'necesario'],
+            [/\bnesecidad\b/gi, 'necesidad'],
+            [/\bnesecita\b/gi, 'necesita'],
+            [/\bconpromiso\b/gi, 'compromiso'],
+            [/\bconpromisos\b/gi, 'compromisos'],
+            [/\bconsetrado\b/gi, 'concentrado'],
+            [/\bconecntrado\b/gi, 'concentrado'],
+            [/\bprosimo\b/gi, 'próximo'],
+            [/\bprosima\b/gi, 'próxima'],
+            [/\bproximo\b/gi, 'próximo'],
+            [/\bproxima\b/gi, 'próxima'],
+            [/\bnumero\b/gi, 'número'],
+            [/\bnumeros\b/gi, 'números'],
+            [/\btelefono\b/gi, 'teléfono'],
+            [/\bcredito\b/gi, 'crédito'],
+            [/\beconomica\b/gi, 'económica'],
+            [/\beconomico\b/gi, 'económico'],
+            [/\bimagenes\b/gi, 'imágenes'],
+            [/\bimagen\b/gi, 'imagen'],
+            [/\bcamara\b/gi, 'cámara'],
+            [/\bvehiculo\b/gi, 'vehículo'],
+            [/\breunion\b/gi, 'reunión'],
+            [/\bcomite\b/gi, 'comité'],
+            [/\banalisis\b/gi, 'análisis'],
+            [/\blinea\b/gi, 'línea'],
+            [/\blineas\b/gi, 'líneas'],
+            [/\bdia\b/gi, 'día'],
+            [/\bdias\b/gi, 'días'],
+            [/\bmas\b/gi, 'más'],
+
+            // Términos técnicos Italcol y agropecuarios
+            [/\btecnico\b/gi, 'técnico'],
+            [/\btecnica\b/gi, 'técnica'],
+            [/\btecnicos\b/gi, 'técnicos'],
+            [/\bproduccion\b/gi, 'producción'],
+            [/\balimentacion\b/gi, 'alimentación'],
+            [/\bnutricion\b/gi, 'nutrición'],
+            [/\bconversion\b/gi, 'conversión'],
+            [/\bbiometria\b/gi, 'biometría'],
+            [/\bgalpon\b/gi, 'galpón'],
+            [/\bmedicacion\b/gi, 'medicación'],
+            [/\bvitaminizacion\b/gi, 'vitaminización'],
+            [/\bdesparasitacion\b/gi, 'desparasitación'],
+            [/\bvacunacion\b/gi, 'vacunación'],
+            [/\binseminacion\b/gi, 'inseminación'],
+            [/\bformulacion\b/gi, 'formulación'],
+            [/\bevaluacion\b/gi, 'evaluación'],
+            [/\bcapacitacion\b/gi, 'capacitación'],
+            [/\bcertificacion\b/gi, 'certificación'],
+            [/\bfidelizacion\b/gi, 'fidelización'],
+            [/\brecepcion\b/gi, 'recepción'],
+            [/\bliquidacion\b/gi, 'liquidación'],
+            [/\bprogramacion\b/gi, 'programación'],
+            [/\bseñalizacion\b/gi, 'señalización'],
+            [/\binstalacion\b/gi, 'instalación'],
+            [/\bparametro\b/gi, 'parámetro'],
+            [/\bparametros\b/gi, 'parámetros'],
+            [/\batencion\b/gi, 'atención'],
+            [/\brevision\b/gi, 'revisión'],
+            [/\bsolucion\b/gi, 'solución'],
+            [/\bgestion\b/gi, 'gestión'],
+            [/\baccion\b/gi, 'acción'],
+            [/\bregion\b/gi, 'región'],
+            [/\bcalificacion\b/gi, 'calificación'],
+            [/\bverificacion\b/gi, 'verificación'],
+            [/\brecomendacion\b/gi, 'recomendación'],
+            [/\bplaneacion\b/gi, 'planeación'],
+            [/\bitalcol\b/gi, 'Italcol'],
+
+            // Verbos en pretérito comúnmente escritos sin tilde (se + verbo o verbo directo)
+            [/\brealizo\b/gi, 'realizó'],
+            [/\breviso\b/gi, 'revisó'],
+            [/\bentrego\b/gi, 'entregó'],
+            [/\bsolicito\b/gi, 'solicitó'],
+            [/\bvisito\b/gi, 'visitó'],
+            [/\bhablo\b/gi, 'habló'],
+            [/\bacordo\b/gi, 'acordó'],
+            [/\bquedo\b/gi, 'quedó'],
+            [/\bexplico\b/gi, 'explicó'],
+            [/\bdespacho\b/gi, 'despachó'],
+            [/\brecibio\b/gi, 'recibió'],
+            [/\bvendio\b/gi, 'vendió'],
+            [/\bofrecio\b/gi, 'ofreció'],
+            [/\bverifico\b/gi, 'verificó'],
+            [/\bcapacito\b/gi, 'capacitó'],
+            [/\bevaluo\b/gi, 'evaluó'],
+            [/\binicio\b/gi, 'inició'],
+            [/\bfinalizo\b/gi, 'finalizó'],
+            [/\bconfirmo\b/gi, 'confirmó'],
+            [/\bcoordino\b/gi, 'coordinó'],
+            [/\bprogramo\b/gi, 'programó'],
+            [/\bpresento\b/gi, 'presentó'],
+            [/\bobservo\b/gi, 'observó'],
+            [/\brecomendo\b/gi, 'recomendó'],
+            [/\bsugirio\b/gi, 'sugirió'],
+            [/\batendio\b/gi, 'atendió'],
+            [/\btomo\b/gi, 'tomó'],
+            [/\bdejo\b/gi, 'dejó'],
+            [/\benvio\b/gi, 'envió'],
+            [/\bllamo\b/gi, 'llamó'],
+            [/\bpago\b/gi, 'pagó'],
+            [/\bcompro\b/gi, 'compró'],
+            [/\bpeso\b/gi, 'pesó'],
+            [/\bmidio\b/gi, 'midió'],
+            [/\blogro\b/gi, 'logró'],
+            [/\bmostro\b/gi, 'mostró'],
+            [/\bindico\b/gi, 'indicó'],
+            [/\bmanifesto\b/gi, 'manifestó'],
+            [/\bgenero\b/gi, 'generó'],
+            [/\bsalio\b/gi, 'salió'],
+            [/\bpidio\b/gi, 'pidió'],
+            [/\bbrindo\b/gi, 'brindó'],
+            [/\bapoyo\b/gi, 'apoyó'],
+            [/\basistio\b/gi, 'asistió'],
+            [/\bparticipo\b/gi, 'participó']
+        ];
+
+        diccionario.forEach(([regex, reemplazo]) => {
+            t = preserveCaseReplace(t, regex, reemplazo);
+        });
+
+        // Restaurar sustantivos que pudieron tildarse como verbo si llevan artículo antes (ej: "el apoyo", "el envio", "el pago", "el peso", "el inicio", "el calculo")
+        const sustantivosConArticulo = [
+            [/\b(el|un|su|este|con|sin|de)\s+apoyó\b/gi, '$1 apoyo'],
+            [/\b(el|un|su|este|con|sin|de)\s+envió\b/gi, '$1 envío'],
+            [/\b(el|un|su|este|con|sin|de)\s+pagó\b/gi, '$1 pago'],
+            [/\b(el|un|su|este|con|sin|de)\s+pesó\b/gi, '$1 peso'],
+            [/\b(al|el|un|su|este|desde)\s+inició\b/gi, '$1 inicio'],
+            [/\b(la|esta|esa|una)\s+visitó\b/gi, '$1 visita'],
+            [/\b(más)\s+(sin embargo|no obstante|pero)\b/gi, 'mas $2']
+        ];
+        sustantivosConArticulo.forEach(([regex, reemplazo]) => {
+            t = t.replace(regex, reemplazo);
+        });
+
+        // 3. Capitalizar inicio y después de signos de cierre (. ! ?)
+        t = t.charAt(0).toUpperCase() + t.slice(1);
+        t = t.replace(/([.!?]\s+)([a-záéíóúñ])/g, (_, sep, letra) => sep + letra.toUpperCase());
+
+        // 4. Asegurar punto final
+        if (!/[.!?]$/.test(t)) {
+            t += '.';
+        }
+
+        return t;
+    };
+
+    const parafrasearEstiloEjecutivoLocal = (texto) => {
+        let t = corregirOrtografiaLocal(texto);
+        if (!t) return '';
+
+        const girosEjecutivos = [
+            [/^se fue a donde el cliente\b/gi, 'Se realizó visita al cliente'],
+            [/^fui donde el cliente\b/gi, 'Se realizó visita al cliente'],
+            [/^se visito el cliente\b/gi, 'Se realizó visita al cliente'],
+            [/^se visitó el cliente\b/gi, 'Se realizó visita al cliente'],
+            [/\bdonde el cliente\b/gi, 'en las instalaciones del cliente'],
+            [/\by se habló de\b/gi, 'y se trataron temas relacionados con'],
+            [/\by se habló sobre\b/gi, 'y se abordaron aspectos referentes a'],
+            [/\bse habló sobre\b/gi, 'se abordaron aspectos referentes a'],
+            [/\bse habló de\b/gi, 'se trataron temas relacionados con'],
+            [/\bel cliente dice que\b/gi, 'el cliente manifiesta que'],
+            [/\bdice el cliente que\b/gi, 'el cliente manifiesta que'],
+            [/\bquedamos en que\b/gi, 'se acordó como compromiso que'],
+            [/\bse quedó en que\b/gi, 'se acordó como compromiso que'],
+            [/\bpara ver si\b/gi, 'con el fin de evaluar si'],
+            [/\bpara que el cliente\b/gi, 'con el propósito de que el cliente'],
+            [/\btodo salió bien\b/gi, 'la actividad se desarrolló satisfactoriamente'],
+            [/\bno hubo problemas\b/gi, 'la jornada transcurrió sin novedades'],
+            [/\bhizo pedido\b/gi, 'realizó un pedido'],
+            [/\bpara la otra semana\b/gi, 'para la próxima semana'],
+            [/\bla idea es\b/gi, 'el objetivo consiste en'],
+            [/\bpara bien\b/gi, 'de manera positiva'],
+            [/\btambién se\b/gi, 'asimismo, se']
+        ];
+
+        girosEjecutivos.forEach(([regex, reemplazo]) => {
+            t = preserveCaseReplace(t, regex, reemplazo);
+        });
+
+        // Limpiar posibles dobles espacios o comas huérfanas tras parafraseo
+        t = t.replace(/\s+/g, ' ').replace(/\s+,/g, ',');
+        t = t.charAt(0).toUpperCase() + t.slice(1);
+        t = t.replace(/([.!?]\s+)([a-záéíóúñ])/g, (_, sep, letra) => sep + letra.toUpperCase());
+        if (!/[.!?]$/.test(t)) t += '.';
+        return t;
+    };
+
+    const corregirConLanguageTool = async (texto) => {
+        const palabrasProtegidas = new Set([
+            'ITALCOL', 'VGR', 'NIRS', 'ICA', 'ITALPAY', 'CEPI', 'FENAVI',
+            'PORCIGENES', 'PORCIXPERT', 'AQUAEXPERT', 'BROILER', 'BOOTCAMP',
+            'C01', 'C02', 'C03', 'PORKAMERICAS', 'PORKCOLOMBIA', 'ITALSAL', 'PCR'
+        ]);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+        try {
+            const response = await fetch('https://api.languagetool.org/v2/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `text=${encodeURIComponent(texto)}&language=es`,
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) return texto;
+            const data = await response.json();
+            if (!data.matches || data.matches.length === 0) return texto;
+
+            let resultado = texto;
+            // Ordenar de atrás hacia adelante para no desplazar offsets
+            const matchesOrdenados = [...data.matches].sort((a, b) => b.offset - a.offset);
+
+            for (const match of matchesOrdenados) {
+                if (!match.replacements || match.replacements.length === 0) continue;
+                const fragmento = resultado.slice(match.offset, match.offset + match.length);
+
+                // Proteger siglas, nombres en mayúsculas sostenidas o códigos numéricos
+                if (palabrasProtegidas.has(fragmento.toUpperCase()) || /^[A-Z0-9-]{2,}$/.test(fragmento)) {
+                    continue;
+                }
+
+                // Evitar cambiar un nombre propio por una palabra común si está capitalizado en medio de una oración
+                const sugerencia = match.replacements[0].value;
+                if (match.rule && match.rule.issueType === 'misspelling' && /^[A-ZÁÉÍÓÚÑ]/.test(fragmento) && match.offset > 0 && !/[.!?]\s+$/.test(resultado.slice(0, match.offset))) {
+                    // Si es posible nombre propio y la sugerencia empieza en minúscula, omitir
+                    if (/^[a-záéíóúñ]/.test(sugerencia)) continue;
+                }
+
+                resultado = resultado.slice(0, match.offset) + sugerencia + resultado.slice(match.offset + match.length);
+            }
+            return resultado;
+        } catch (err) {
+            clearTimeout(timeoutId);
+            return texto;
+        }
+    };
+
+    const mejorarConIAExterna = async (textoBase) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const promptSistema = 'Eres un redactor corporativo de Italcol. Corrige toda la ortografía, tildes y puntuación del siguiente texto de observaciones de una visita comercial y mejóralo a una redacción ejecutiva clara, profesional y concisa en español. Conserva exactamente todos los nombres, cifras, lotes, fechas y compromisos originales sin inventar datos. Devuelve ÚNICAMENTE el texto corregido final, sin saludos, comillas ni explicaciones.';
+
+        try {
+            const response = await fetch('https://text.pollinations.ai/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: promptSistema },
+                        { role: 'user', content: textoBase }
+                    ],
+                    model: 'openai',
+                    seed: 42
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) return null;
+            const textoIA = (await response.text()).trim();
+            // Validar que la respuesta sea razonable y no un mensaje de error HTML
+            if (!textoIA || textoIA.length < 3 || textoIA.startsWith('<') || textoIA.length > textoBase.length * 4 + 200) {
+                return null;
+            }
+            return textoIA.replace(/^["«]|["»]$/g, '').trim();
+        } catch (err) {
+            clearTimeout(timeoutId);
+            return null;
+        }
+    };
+
+    const mejorarRedaccionCompleta = async (textoOriginal) => {
+        // Paso 1: Limpieza ortográfica y técnica base
+        let texto = corregirOrtografiaLocal(textoOriginal);
+
+        // Paso 2: Intentar corrección gramatical con LanguageTool + parafraseo IA en paralelo/secuencia
+        const textoLT = await corregirConLanguageTool(texto);
+        const textoEjecutivoLocal = parafrasearEstiloEjecutivoLocal(textoLT);
+
+        // Paso 3: Intentar refinamiento de parafraseo ejecutivo con IA externa
+        const textoIA = await mejorarConIAExterna(textoLT);
+        if (textoIA) {
+            // Pasada final del diccionario local para asegurar términos Italcol
+            return corregirOrtografiaLocal(textoIA);
+        }
+
+        return textoEjecutivoLocal;
+    };
+
+    if (btnMejorarIA && textareaObservaciones) {
+        btnMejorarIA.addEventListener('click', async () => {
+            const currentText = textareaObservaciones.value.trim();
+            if (!currentText || currentText.length < 3) {
+                showToast('Por favor, escribe algunas observaciones antes de mejorar la redacción.', 'error');
+                return;
+            }
+
+            originalObservaciones = textareaObservaciones.value;
+            const originalBtnHtml = btnMejorarIA.innerHTML;
+            btnMejorarIA.disabled = true;
+            btnMejorarIA.innerHTML = '<span class="spinner"></span> Mejorando redacción...';
+
+            try {
+                const resultado = await mejorarRedaccionCompleta(currentText);
+                textareaObservaciones.value = resultado;
+                textareaObservaciones.classList.remove('textarea-ia-highlight');
+                void textareaObservaciones.offsetWidth; // trigger reflow
+                textareaObservaciones.classList.add('textarea-ia-highlight');
+                if (btnUndoIA) btnUndoIA.style.display = 'inline-flex';
+                showToast('¡Ortografía y redacción mejoradas con éxito!', 'success');
+            } catch (err) {
+                textareaObservaciones.value = parafrasearEstiloEjecutivoLocal(currentText);
+                if (btnUndoIA) btnUndoIA.style.display = 'inline-flex';
+                showToast('Ortografía y redacción mejoradas.', 'success');
+            } finally {
+                btnMejorarIA.disabled = false;
+                btnMejorarIA.innerHTML = originalBtnHtml;
+            }
+        });
+    }
+
+    if (btnUndoIA && textareaObservaciones) {
+        btnUndoIA.addEventListener('click', () => {
+            if (originalObservaciones !== '') {
+                textareaObservaciones.value = originalObservaciones;
+                btnUndoIA.style.display = 'none';
+                originalObservaciones = '';
+                showToast('Se restauró el texto original.', 'success');
+            }
+        });
+    }
+
     // Build Payload Helper
     const getPayload = () => {
         const persona = document.getElementById('persona').value;
@@ -1030,6 +1441,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Generar texto en formato WhatsApp (sin incluir quien realiza la visita)
     const generateWhatsAppText = () => {
+        if (textareaObservaciones && textareaObservaciones.value.trim()) {
+            textareaObservaciones.value = corregirOrtografiaLocal(textareaObservaciones.value);
+        }
         const data = getPayload();
 
         if (!data.fecha || !data.lugar || !data.razon_social || !data.linea || !data.pilar || !data.marca || !data.actividad || !data.observaciones) {
@@ -1136,6 +1550,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnGuardar.addEventListener('click', () => {
         const webhookUrl = 'https://script.google.com/macros/s/AKfycbynXnG4YR2EaXxU3qpRfD8-uAhoWSap57nh-JrR1SUAw6zzlsdmKk6gZe4IAxFyow_S/exec';
 
+        if (textareaObservaciones && textareaObservaciones.value.trim()) {
+            textareaObservaciones.value = corregirOrtografiaLocal(textareaObservaciones.value);
+        }
         const data = getPayload();
         // Validation check
         if (!data.persona || !data.fecha || !data.lugar || !data.razon_social || !data.linea || !data.pilar || !data.marca || !data.actividad || !data.observaciones) {
@@ -1177,6 +1594,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('marca').value = '';
             document.getElementById('linea').value = '';
             document.getElementById('observaciones').value = '';
+            if (btnUndoIA) btnUndoIA.style.display = 'none';
+            originalObservaciones = '';
 
             // Clean photo & collage input
             clearAllUploadedPhotos();
